@@ -1,4 +1,4 @@
-module cryosis/md-preview
+module CryoViking/md-preview
 
 go 1.22.2
 
