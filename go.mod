@@ -1,4 +1,4 @@
-module CryoViking/md-preview
+module github.com/CryoViking/md-preview
 
 go 1.22.2
 
