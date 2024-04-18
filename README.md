@@ -7,7 +7,7 @@ project in golang so that it could be a simple CLI tool that I could run from a 
 
 **DISCLAIMER:** This tool is first and foremost a tool for my own workflow. There are countless improvements that could be added but if it doesn't affect my workflow chances are I won't spend the time to add requested features.
 
-**DEMO:**
+**DEMO:**  
 ![demo gif](https://github.com/CryoViking/md-preview/blob/master/demo.gif)
 
 
