@@ -64,7 +64,7 @@ For now tho just follow the following steps (normal for most projects afaik)
 
 ## <a name="license"></a>License
 
-This project is licensed under the License Name - see the [LICENSE](https://github.com/CryoViking/md-preview/blob/master/LICENSE.txt) file for details.
+This project is licensed under the License Name - see the [LICENSE](https://github.com/CryoViking/md-preview/blob/master/LICENSE) file for details.
 
 ## <a name="features"></a>Features
 
