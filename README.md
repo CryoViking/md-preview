@@ -33,6 +33,7 @@ You can also choose to build from source
 ```bash
 git clone https://github.com/CryoViking/md-preview.git
 cd md-preview
+go get -u -v all
 go build
 go install
 ```
