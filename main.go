@@ -16,13 +16,16 @@ import (
 )
 
 type Options struct {
-	MarkdownFile string
-	HtmlContent  chan []byte
-	FileMutext   sync.Mutex
+	MarkdownFile  string
+	HtmlContent   chan []byte
+	FileMutext    sync.Mutex
+	ServerPort    uint16
+	ServerAddress string
 }
 
-func html_page() []byte {
-	htmlContent := []byte(`
+func html_page(o *Options) []byte {
+	// htmlContent := []byte(`
+	htmlContent := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
 <head>
@@ -188,7 +191,9 @@ func html_page() []byte {
 	<div id="sse-data">Preview Server booting up</div>
 
 	<script>
-		const event_source = new EventSource('http://localhost:8080/events');
+` + fmt.Sprintf(`
+		const event_source = new EventSource('http://%s:%v/events');
+    `, o.ServerAddress, o.ServerPort) + fmt.Sprintf(` 
 		event_source.onmessage = function(event) {
 			const data_element = document.getElementById('sse-data');
 			data_element.innerHTML = atob(event.data);
@@ -200,8 +205,9 @@ func html_page() []byte {
 	</script>
 </body>
 </html>
-`)
-	return htmlContent
+`))
+	fmt.Println(htmlContent)
+	return []byte(htmlContent)
 }
 
 func load_file(o *Options) {
@@ -271,7 +277,7 @@ func render_markdown(o *Options) error {
 	// Serve HTML to browser
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write(html_page())
+		w.Write(html_page(o))
 		time.Sleep(time.Second * 2)
 		go load_file(o)
 	})
@@ -306,10 +312,9 @@ func render_markdown(o *Options) error {
 	})
 
 	// Start the web server
-	port := ":8080"
-	fmt.Printf("Preview Server running on port %s\n", port)
+	fmt.Printf("Preview Server running at http://%s:%v\n", o.ServerAddress, o.ServerPort)
 
-	return http.ListenAndServe(port, nil)
+	return http.ListenAndServe(fmt.Sprintf("%s:%v", o.ServerAddress, o.ServerPort), nil)
 }
 
 func main() {
@@ -322,13 +327,29 @@ func main() {
 			if filename == "" {
 				log.Fatalf("missing markdown file argument\n")
 			}
+
 			options := Options{
 				MarkdownFile: c.Args().First(),
 				HtmlContent:  make(chan []byte, 1),
+				// NOTE: Should probably make a smarter way to clamp then just casting..
+				ServerPort:    uint16(c.Int("port")),
+				ServerAddress: c.String("address"),
 			}
 			defer close(options.HtmlContent)
 			go hot_loader(&options)
 			return render_markdown(&options)
+		},
+		Flags: []cli.Flag{
+			&cli.IntFlag{
+				Name:  "port",
+				Value: 8080,
+				Usage: "Sets the port for the server to run on",
+			},
+			&cli.StringFlag{
+				Name:  "address",
+				Value: "localhost",
+				Usage: "Change the event emitter to listen on another address",
+			},
 		},
 	}
 
