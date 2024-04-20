@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 
@@ -206,7 +207,6 @@ func html_page(o *Options) []byte {
 </body>
 </html>
 `))
-	fmt.Println(htmlContent)
 	return []byte(htmlContent)
 }
 
@@ -317,6 +317,14 @@ func render_markdown(o *Options) error {
 	return http.ListenAndServe(fmt.Sprintf("%s:%v", o.ServerAddress, o.ServerPort), nil)
 }
 
+func valid_ip(ip string) bool {
+	if ip == "localhost" || ip == "any" {
+		return true
+	}
+	r, _ := regexp.Compile(`^(25[0-5]|2[0-4][0-9]|[0-1]{1}[0-9]{2}|[1-9]{1}[0-9]{1}|[1-9])\.(25[0-5]|2[0-4][0-9]|[0-1]{1}[0-9]{2}|[1-9]{1}[0-9]{1}|[1-9]|0)\.(25[0-5]|2[0-4][0-9]|[0-1]{1}[0-9]{2}|[1-9]{1}[0-9]{1}|[1-9]|0)\.(25[0-5]|2[0-4][0-9]|[0-1]{1}[0-9]{2}|[1-9]{1}[0-9]{1}|[0-9])$`)
+	return r.MatchString(ip)
+}
+
 func main() {
 	app := &cli.App{
 		Name:      "md-preview",
@@ -327,13 +335,25 @@ func main() {
 			if filename == "" {
 				log.Fatalf("missing markdown file argument\n")
 			}
+			if c.Int("port") < 1 || c.Int("port") > 65535 {
+				log.Fatalf("invalid port number: %d. Valid range is 1-65535", c.Int("port"))
+			}
+			var addr string
+			if !valid_ip(c.String("address")) {
+				log.Fatalf("Invalid address: %s. Please give a valid ip, 'localhost' or 'any'", c.String("address"))
+			} else {
+				if c.String("address") == "any" {
+					addr = "0.0.0.0"
+				} else {
+					addr = c.String("address")
+				}
+			}
 
 			options := Options{
-				MarkdownFile: c.Args().First(),
-				HtmlContent:  make(chan []byte, 1),
-				// NOTE: Should probably make a smarter way to clamp then just casting..
+				MarkdownFile:  c.Args().First(),
+				HtmlContent:   make(chan []byte, 1),
 				ServerPort:    uint16(c.Int("port")),
-				ServerAddress: c.String("address"),
+				ServerAddress: addr,
 			}
 			defer close(options.HtmlContent)
 			go hot_loader(&options)
@@ -353,10 +373,7 @@ func main() {
 		},
 	}
 
-	err := app.Run(os.Args)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
 	}
-
 }
