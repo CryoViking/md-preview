@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sync"
 	"time"
 
@@ -16,13 +17,16 @@ import (
 )
 
 type Options struct {
-	MarkdownFile string
-	HtmlContent  chan []byte
-	FileMutext   sync.Mutex
+	MarkdownFile  string
+	HtmlContent   chan []byte
+	FileMutext    sync.Mutex
+	ServerPort    uint16
+	ServerAddress string
 }
 
-func html_page() []byte {
-	htmlContent := []byte(`
+func html_page(o *Options) []byte {
+	// htmlContent := []byte(`
+	htmlContent := fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
 <head>
@@ -188,7 +192,9 @@ func html_page() []byte {
 	<div id="sse-data">Preview Server booting up</div>
 
 	<script>
-		const event_source = new EventSource('http://localhost:8080/events');
+` + fmt.Sprintf(`
+		const event_source = new EventSource('http://%s:%v/events');
+    `, o.ServerAddress, o.ServerPort) + fmt.Sprintf(` 
 		event_source.onmessage = function(event) {
 			const data_element = document.getElementById('sse-data');
 			data_element.innerHTML = atob(event.data);
@@ -200,8 +206,8 @@ func html_page() []byte {
 	</script>
 </body>
 </html>
-`)
-	return htmlContent
+`))
+	return []byte(htmlContent)
 }
 
 func load_file(o *Options) {
@@ -271,7 +277,7 @@ func render_markdown(o *Options) error {
 	// Serve HTML to browser
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		w.Write(html_page())
+		w.Write(html_page(o))
 		time.Sleep(time.Second * 2)
 		go load_file(o)
 	})
@@ -306,10 +312,17 @@ func render_markdown(o *Options) error {
 	})
 
 	// Start the web server
-	port := ":8080"
-	fmt.Printf("Preview Server running on port %s\n", port)
+	fmt.Printf("Preview Server running at http://%s:%v\n", o.ServerAddress, o.ServerPort)
 
-	return http.ListenAndServe(port, nil)
+	return http.ListenAndServe(fmt.Sprintf("%s:%v", o.ServerAddress, o.ServerPort), nil)
+}
+
+func valid_ip(ip string) bool {
+	if ip == "localhost" || ip == "any" {
+		return true
+	}
+	r, _ := regexp.Compile(`^(25[0-5]|2[0-4][0-9]|[0-1]{1}[0-9]{2}|[1-9]{1}[0-9]{1}|[1-9])\.(25[0-5]|2[0-4][0-9]|[0-1]{1}[0-9]{2}|[1-9]{1}[0-9]{1}|[1-9]|0)\.(25[0-5]|2[0-4][0-9]|[0-1]{1}[0-9]{2}|[1-9]{1}[0-9]{1}|[1-9]|0)\.(25[0-5]|2[0-4][0-9]|[0-1]{1}[0-9]{2}|[1-9]{1}[0-9]{1}|[0-9])$`)
+	return r.MatchString(ip)
 }
 
 func main() {
@@ -322,20 +335,45 @@ func main() {
 			if filename == "" {
 				log.Fatalf("missing markdown file argument\n")
 			}
+			if c.Int("port") < 1 || c.Int("port") > 65535 {
+				log.Fatalf("invalid port number: %d. Valid range is 1-65535", c.Int("port"))
+			}
+			var addr string
+			if !valid_ip(c.String("address")) {
+				log.Fatalf("Invalid address: %s. Please give a valid ip, 'localhost' or 'any'", c.String("address"))
+			} else {
+				if c.String("address") == "any" {
+					addr = "0.0.0.0"
+				} else {
+					addr = c.String("address")
+				}
+			}
+
 			options := Options{
-				MarkdownFile: c.Args().First(),
-				HtmlContent:  make(chan []byte, 1),
+				MarkdownFile:  c.Args().First(),
+				HtmlContent:   make(chan []byte, 1),
+				ServerPort:    uint16(c.Int("port")),
+				ServerAddress: addr,
 			}
 			defer close(options.HtmlContent)
 			go hot_loader(&options)
 			return render_markdown(&options)
 		},
+		Flags: []cli.Flag{
+			&cli.IntFlag{
+				Name:  "port",
+				Value: 8080,
+				Usage: "Sets the port for the server to run on",
+			},
+			&cli.StringFlag{
+				Name:  "address",
+				Value: "localhost",
+				Usage: "Change the event emitter to listen on another address",
+			},
+		},
 	}
 
-	err := app.Run(os.Args)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
 	}
-
 }
