@@ -79,5 +79,4 @@ Yeah look... I don't know if I'll keep working on this. I primarily built this f
 as I get annoyed with things I'll make changes and push.
 
 ### List of potential things I might add:
-- Able to specify ports through --port|-p
 - Fix the rare occurance of the MD preview not beeing loaded at first.
